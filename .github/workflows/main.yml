@@ -29,15 +29,23 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 300
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
       - name: Install dependencies
         continue-on-error: ${{ matrix.continue || false }}
         run: bash ./script/install-dependencies.sh
-      - name: Lint
+      - name: Lint (flake8)
         continue-on-error: ${{ matrix.continue || false }}
         run: flake8 --count
+      - name: Lint (line terminators)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: "! grep 'with CRLF line terminators' <(git ls-files | file -nNf-)"
+      - name: Lint (file permissions)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: "! grep -Ev '^644' <(git ls-files src/ tests/ | xargs stat '--format=%a %n')"
       - name: Test
         continue-on-error: ${{ matrix.continue || false }}
         run: pytest -r a --cov --cov-branch --cov-report=xml
@@ -144,7 +152,10 @@ jobs:
       - name: Install dependencies
         run: |
           ./script/install-dependencies.sh
+          python -m pip install -r docs-requirements.txt
           python -m pip install --upgrade wheel twine
+      - name: Build man page
+        run: make --directory=docs man
       - name: Installer file name
         id: installer
         run: echo ::set-output name=filename::streamlink-$(python setup.py --version | sed 's/+/_/')
